@@ -17,7 +17,7 @@ int listen_socket(int port);
 int recv_client(int sock, char *buffer);
 int send_client(int csock, char *buffer);
 
-/*test coment*/
+/*test coment2*/
 int listen_socket(int port)
 {
 	int sock = socket(AF_INET, SOCK_STREAM, 0); 
