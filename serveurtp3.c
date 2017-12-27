@@ -118,7 +118,57 @@ struct Client add_client(int ssock, int* nb_c, int* max_fd)
 	return new_client;
 }
 
+int BroadCastMessageToClients(int nb_c, int sender, char message[SIZE_BUFFER],struct Client tab_client[MAX_CLIENT])
+{
+					
+					for(int j = 0; j < nb_c; j++)
+					{
+						if( j != sender)
+						{
+							char tab_buffer[SIZE_BUFFER] = {0};
+							strcat(tab_buffer, tab_client[sender].pseudo);
+							strcat(tab_buffer, " : ");
+							strcat(tab_buffer, message);
+							int a= send_client(tab_client[j].csock, tab_buffer);
+						}
+					}
+}
 
+int RegisterAllClients(int sock,int nb_c, struct Client tab_client[MAX_CLIENT] ,fd_set readfds)
+{
+	
+	FD_ZERO(&readfds);  		
+	FD_SET(STDIN_FILENO, &readfds); 
+	FD_SET(sock, &readfds); 		
+	for(int i=0; i<nb_c; i++) FD_SET(tab_client[i].csock, &readfds); 
+}
+
+void Client ReceiveClientMessages(int nb_c,fd_set readfds,struct Client *tab_client )
+{
+	char buffer[SIZE_BUFFER]={0};
+
+	for(int i = 0; i < nb_c; i++)
+		{
+			if( FD_ISSET( tab_client[i].csock, &readfds))
+			{
+				memset(buffer, 0, SIZE_BUFFER);		
+				int rec = recv_client( tab_client[i].csock, buffer);
+
+				if(rec==0)
+				{
+					rmv_client(tab_client, i, &nb_c);
+				}
+				else
+				{
+					printf("I got this message from %s : %s\n",tab_client[i].pseudo,buffer);
+
+					BroadCastMessageToClients(nb_c,i,buffer,tab_client);
+				}
+			}
+	
+		}
+
+}
 int main(int argc, char ** argv)
 {
 	if( argc != 2)
@@ -131,8 +181,7 @@ int main(int argc, char ** argv)
 
 	struct Client tab_client[MAX_CLIENT];
 	int nb_c = 0;
-	int i,j,k;
-	char buffer[SIZE_BUFFER]={0};
+	
 
 	int sock = listen_socket(port);
 	printf("ecoute demarre\n");
@@ -143,10 +192,8 @@ int main(int argc, char ** argv)
 	
 	while(1)
 	{
-		FD_ZERO(&readfds);  		
-		FD_SET(STDIN_FILENO, &readfds); 
-		FD_SET(sock, &readfds); 		
-		for(i=0; i<nb_c; i++) FD_SET(tab_client[i].csock, &readfds); 
+		RegisterAllClients(sock,nb_c,tab_client, readfds);
+
 		int selec = select( max_fd + 1, &readfds, NULL, NULL, NULL); 
 		
 		if (selec == -1)
@@ -161,44 +208,8 @@ int main(int argc, char ** argv)
 				tab_client[nb_c] = add_client(sock, &nb_c, &max_fd);
 			printf("connexion de %s\n", tab_client[nb_c-1].pseudo); 
 		}
-
-		for(i = 0; i < nb_c; i++)
-		{
-			if( FD_ISSET( tab_client[i].csock, &readfds))
-			{
-				memset(buffer, 0, SIZE_BUFFER);		
-				int rec = recv_client( tab_client[i].csock, buffer);
-				if(rec==0)
-				{
-					rmv_client(tab_client, i, &nb_c);
-				}
-				else
-				{
-					printf("I got this message from %s : %s\n",tab_client[i].pseudo,buffer);
-
-					for(j = 0; j < nb_c; j++)
-					{
-						if( j != i)
-						{
-							char tab_buffer[SIZE_BUFFER] = {0};
-							strcat(tab_buffer, tab_client[i].pseudo);
-							strcat(tab_buffer, " : ");
-							strcat(tab_buffer, buffer);
-							int a= send_client(tab_client[j].csock, tab_buffer);
-						}
-					}
-				}
-			}
-			char tabi[SIZE_BUFFER]={0};
-			if ( FD_ISSET(STDIN_FILENO , &readfds) )			
-			{
-				memset(tabi,0,SIZE_BUFFER);
-				fgets(tabi,SIZE_BUFFER,stdin);      
-				buffer[strlen(tabi)-1]= '\0';
-				for(k=0; k<nb_c;k++)
-					send_client(tab_client[k].csock, tabi);   
-			}
-		}
+		tab_client=ReceiveClientMessages(nb_c,readfds,tab_client);
+	
 	}
 	return 0;
 }	
